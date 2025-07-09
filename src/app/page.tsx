@@ -63,7 +63,7 @@ const initialVulnerabilitiesData: Vulnerability[] = [
     id: '5', nombre: 'Falsificación de petición en sitios cruzados', tipo: 'CSRF', nivelRiesgo: 'Medio', fechaDeteccion: '25/03/2024',
     descripcionTecnica: 'Un atacante engaña al navegador de una víctima para que envíe una una solicitud HTTP a una aplicación web en la que la víctima está autenticada.',
     posiblesSoluciones: 'Implementar tokens anti-CSRF en todos los formularios y solicitudes que cambien el estado.',
-    iconos: { gravedad: '🔄', categoria: '🌐' },
+    iconos: { gravedad: '�', categoria: '🌐' },
     recomendacionesMitigacion: 'Usar SameSite cookies. Implementar cabeceras de seguridad como X-Frame-Options y Strict-Transport-Security.',
     evidences: [],
   },
@@ -485,6 +485,68 @@ function VulnerabilityDetail({ vulnerability, onBack, isAnalyst, onSaveEvidence,
 }
 
 
+// Componente para el modal de inicio de sesión
+function LoginModal({ onLogin, onCancel, errorMessage }: { onLogin: (username: string, password: string) => void; onCancel: () => void; errorMessage: string | null; }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onLogin(username, password);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white p-8 rounded-lg shadow-lg max-w-sm w-full">
+        <h2 className="text-xl font-bold text-gray-800 mb-4 text-center">Iniciar Sesión Analista</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700">Usuario:</label>
+            <input
+              type="text"
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">Contraseña:</label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              required
+            />
+          </div>
+          {errorMessage && (
+            <p className="text-red-500 text-sm text-center">{errorMessage}</p>
+          )}
+          <div className="flex justify-end space-x-4 mt-6">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 transition duration-150 ease-in-out"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out"
+            >
+              Entrar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+
 // Componente principal del Dashboard
 function DashboardInka() {
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>(initialVulnerabilitiesData);
@@ -499,6 +561,8 @@ function DashboardInka() {
 
   // Simulación de perfil de analista
   const [isAnalyst, setIsAnalyst] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false); // Estado para mostrar/ocultar el modal de login
+  const [loginErrorMessage, setLoginErrorMessage] = useState<string | null>(null); // Mensaje de error del login
 
   // Función para filtrar las vulnerabilidades
   const filteredVulnerabilities = vulnerabilities.filter(vuln => {
@@ -558,10 +622,12 @@ function DashboardInka() {
     setVulnerabilities(prevVulns =>
       prevVulns.map(vuln => {
         if (vuln.id === vulnId) {
-          // Si es la primera evidencia, marcarla como principal
           const updatedEvidences = [...vuln.evidences];
-          if (updatedEvidences.length === 0) {
+          // Solo marcar como principal si no hay ya una principal
+          if (!updatedEvidences.some(ev => ev.isPrimary)) {
             newEvidence.isPrimary = true;
+          } else {
+            newEvidence.isPrimary = false; // Asegurarse de que las nuevas no sean principales si ya existe una
           }
           return { ...vuln, evidences: [...updatedEvidences, newEvidence] };
         }
@@ -592,7 +658,7 @@ function DashboardInka() {
           const filteredEvidences = vuln.evidences.filter(ev => ev.id !== evidenceId);
           // Si la evidencia eliminada era la principal, y aún quedan evidencias,
           // marcar la primera como principal (o ajustar la lógica de tu negocio)
-          if (filteredEvidences.length > 0 && !filteredEvidences.some(ev => ev.isPrimary)) {
+          if (vuln.evidences.find(ev => ev.id === evidenceId)?.isPrimary && filteredEvidences.length > 0) {
             filteredEvidences[0].isPrimary = true;
           }
           return { ...vuln, evidences: filteredEvidences };
@@ -600,6 +666,31 @@ function DashboardInka() {
         return vuln;
       })
     );
+  };
+
+  // Lógica de inicio de sesión
+  const handleAnalystLogin = (username: string, password: string) => {
+    const CORRECT_USERNAME = 'admin';
+    const CORRECT_PASSWORD = 'adminpass';
+
+    if (username === CORRECT_USERNAME && password === CORRECT_PASSWORD) {
+      setIsAnalyst(true);
+      setShowLoginModal(false);
+      setLoginErrorMessage(null);
+    } else {
+      setLoginErrorMessage('Usuario o contraseña incorrectos.');
+    }
+  };
+
+  const handleAnalystToggle = () => {
+    if (isAnalyst) {
+      // Si ya es analista, al hacer clic, se desactiva
+      setIsAnalyst(false);
+    } else {
+      // Si no es analista, al hacer clic, se muestra el modal de login
+      setShowLoginModal(true);
+      setLoginErrorMessage(null); // Limpiar cualquier mensaje de error previo
+    }
   };
 
 
@@ -621,7 +712,8 @@ function DashboardInka() {
           position: absolute; top: 4px; left: 4px; width: 24px; height: 24px;
           border-radius: 9999px; background-color: #ffffff; transition: transform 0.3s ease;
         }
-        .toggle-checkbox:checked + div { background-color: #6366f1; /* indigo-500 */ }
+        /* Color del toggle en modo analista (cambiado a un gris muy oscuro/negro) */
+        .toggle-checkbox:checked + div { background-color: #000000; /* Pure black */ }
         .toggle-checkbox:checked + div .dot { transform: translateX(24px); }
       `}} />
 
@@ -633,10 +725,11 @@ function DashboardInka() {
             type="checkbox"
             className="toggle-checkbox"
             checked={isAnalyst}
-            onChange={() => setIsAnalyst(!isAnalyst)}
+            onChange={handleAnalystToggle} // Usar la nueva función de manejo
           />
           <div><div className="dot"></div></div>
-          <span className="ml-3 text-white font-medium">Modo Analista</span> {/* Texto en blanco para contraste */}
+          {/* Aquí el texto del Modo Analista ahora es negro */}
+          <span className="ml-3 text-black font-medium">Modo Analista</span>
         </label>
       </header>
 
@@ -706,14 +799,14 @@ function DashboardInka() {
             {/* Tabla de Vulnerabilidades */}
             <div className="overflow-x-auto rounded-lg shadow-md border border-gray-200">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50"><tr> {/* Compacted thead structure */}
+                <thead className="bg-gray-50"><tr>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nivel de riesgo</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha de detecc.</th>
-                  <th scope="col" className="relative px-6 py-3"><span className="sr-only">Acciones</span></th> {/* Cambiado a Acciones */}
+                  <th scope="col" className="relative px-6 py-3"><span className="sr-only">Acciones</span></th>
                 </tr></thead>
-                <tbody className="bg-white divide-y divide-gray-200">{/* Compacted tbody structure */}
-                  {filteredVulnerabilities.length === 0 ? (
+                <tbody className="bg-white divide-y divide-gray-200">{
+                  filteredVulnerabilities.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-6 py-4 whitespace-nowrap text-center text-gray-500">No se encontraron vulnerabilidades que coincidan con los filtros.</td>
                     </tr>
@@ -788,6 +881,14 @@ function DashboardInka() {
           message="¿Estás seguro de que quieres eliminar esta vulnerabilidad? Esta acción es irreversible."
           onConfirm={confirmDelete}
           onCancel={cancelDelete}
+        />
+      )}
+
+      {showLoginModal && (
+        <LoginModal
+          onLogin={handleAnalystLogin}
+          onCancel={() => setShowLoginModal(false)}
+          errorMessage={loginErrorMessage}
         />
       )}
     </div>
